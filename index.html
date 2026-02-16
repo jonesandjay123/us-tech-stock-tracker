@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>美股科技基金均線追蹤</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1923;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        header {
+            background: #1a2634;
+            padding: 20px 30px;
+            border-bottom: 1px solid #2a3a4a;
+        }
+        header h1 { font-size: 1.5rem; color: #4fc3f7; }
+        header p { font-size: 0.85rem; color: #8899aa; margin-top: 4px; }
+        .controls {
+            display: flex;
+            gap: 12px;
+            padding: 16px 30px;
+            background: #152028;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .controls label { font-size: 0.85rem; color: #8899aa; }
+        .controls select, .controls button {
+            background: #1a2634;
+            color: #e0e0e0;
+            border: 1px solid #2a3a4a;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .controls button:hover { background: #2a3a4a; }
+        .controls button.active { background: #4fc3f7; color: #0f1923; font-weight: 600; }
+        .chart-container {
+            padding: 20px 30px;
+            height: calc(100vh - 200px);
+            min-height: 400px;
+        }
+        canvas { width: 100% !important; }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 300px;
+            color: #8899aa;
+            font-size: 1.1rem;
+        }
+        .ticker-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ma-toggles { display: flex; gap: 8px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📈 美股科技基金均線追蹤</h1>
+        <p>US Tech ETF Moving Average Tracker</p>
+    </header>
+    <div class="controls">
+        <div>
+            <label>標的：</label>
+            <div class="ticker-buttons" id="tickerButtons">
+                <button data-ticker="QQQ" class="active">QQQ</button>
+                <button data-ticker="VGT">VGT</button>
+                <button data-ticker="XLK">XLK</button>
+                <button data-ticker="ARKK">ARKK</button>
+                <button data-ticker="SMH">SMH</button>
+                <button data-ticker="SOXX">SOXX</button>
+            </div>
+        </div>
+        <div>
+            <label>均線：</label>
+            <div class="ma-toggles" id="maToggles">
+                <button data-ma="5" class="active">MA5</button>
+                <button data-ma="10" class="active">MA10</button>
+                <button data-ma="20" class="active">MA20</button>
+                <button data-ma="60">MA60</button>
+                <button data-ma="120">MA120</button>
+                <button data-ma="240">MA240</button>
+            </div>
+        </div>
+        <div>
+            <label>期間：</label>
+            <select id="rangePicker">
+                <option value="3m">3 個月</option>
+                <option value="6m" selected>6 個月</option>
+                <option value="1y">1 年</option>
+                <option value="2y">2 年</option>
+            </select>
+        </div>
+    </div>
+    <div class="chart-container">
+        <div class="loading" id="loading">載入中...</div>
+        <canvas id="chart" style="display:none;"></canvas>
+    </div>
+
+    <script>
+        const MA_COLORS = {
+            5:   '#ffeb3b',
+            10:  '#ff9800',
+            20:  '#f44336',
+            60:  '#4fc3f7',
+            120: '#ab47bc',
+            240: '#66bb6a',
+        };
+
+        let chart = null;
+        let currentTicker = 'QQQ';
+        let activeMAs = new Set([5, 10, 20]);
+        let rawData = [];
+
+        // Ticker buttons
+        document.getElementById('tickerButtons').addEventListener('click', e => {
+            if (!e.target.dataset.ticker) return;
+            document.querySelectorAll('#tickerButtons button').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            currentTicker = e.target.dataset.ticker;
+            fetchAndRender();
+        });
+
+        // MA toggles
+        document.getElementById('maToggles').addEventListener('click', e => {
+            if (!e.target.dataset.ma) return;
+            const ma = parseInt(e.target.dataset.ma);
+            if (activeMAs.has(ma)) {
+                activeMAs.delete(ma);
+                e.target.classList.remove('active');
+            } else {
+                activeMAs.add(ma);
+                e.target.classList.add('active');
+            }
+            renderChart();
+        });
+
+        // Range picker
+        document.getElementById('rangePicker').addEventListener('change', fetchAndRender);
+
+        function getRangeDays() {
+            const val = document.getElementById('rangePicker').value;
+            const map = { '3m': 90, '6m': 180, '1y': 365, '2y': 730 };
+            return map[val] || 180;
+        }
+
+        function calcMA(data, period) {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    result.push(null);
+                } else {
+                    let sum = 0;
+                    for (let j = i - period + 1; j <= i; j++) {
+                        sum += data[j].close;
+                    }
+                    result.push(sum / period);
+                }
+            }
+            return result;
+        }
+
+        async function fetchAndRender() {
+            const loading = document.getElementById('loading');
+            const canvas = document.getElementById('chart');
+            loading.style.display = 'flex';
+            canvas.style.display = 'none';
+
+            const rangeDays = getRangeDays();
+            // Fetch extra data for long MAs
+            const fetchDays = rangeDays + 250;
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - fetchDays);
+
+            const period1 = Math.floor(startDate.getTime() / 1000);
+            const period2 = Math.floor(endDate.getTime() / 1000);
+
+            try {
+                // Using Yahoo Finance via a CORS proxy or direct
+                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${currentTicker}?period1=${period1}&period2=${period2}&interval=1d`;
+                const resp = await fetch(url);
+                const json = await resp.json();
+                const result = json.chart.result[0];
+                const timestamps = result.timestamp;
+                const quotes = result.indicators.quote[0];
+
+                rawData = timestamps.map((t, i) => ({
+                    date: new Date(t * 1000),
+                    close: quotes.close[i],
+                    open: quotes.open[i],
+                    high: quotes.high[i],
+                    low: quotes.low[i],
+                })).filter(d => d.close != null);
+
+                renderChart();
+            } catch (err) {
+                loading.textContent = `載入失敗：${err.message}。可能需要設定 CORS proxy。`;
+                console.error(err);
+            }
+        }
+
+        function renderChart() {
+            const loading = document.getElementById('loading');
+            const canvas = document.getElementById('chart');
+
+            if (rawData.length === 0) return;
+
+            const rangeDays = getRangeDays();
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - rangeDays);
+
+            // Find the index where display starts
+            let displayStart = rawData.findIndex(d => d.date >= cutoffDate);
+            if (displayStart < 0) displayStart = 0;
+
+            const displayData = rawData.slice(displayStart);
+            const labels = displayData.map(d => d.date);
+
+            const datasets = [{
+                label: currentTicker,
+                data: displayData.map(d => d.close),
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.1,
+                order: 0,
+            }];
+
+            activeMAs.forEach(period => {
+                const allMA = calcMA(rawData, period);
+                const maSlice = allMA.slice(displayStart);
+                datasets.push({
+                    label: `MA${period}`,
+                    data: maSlice,
+                    borderColor: MA_COLORS[period],
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    borderDash: period >= 60 ? [5, 3] : [],
+                    tension: 0.1,
+                    order: 1,
+                });
+            });
+
+            if (chart) chart.destroy();
+
+            loading.style.display = 'none';
+            canvas.style.display = 'block';
+
+            chart = new Chart(canvas, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#8899aa', usePointStyle: true },
+                        },
+                        tooltip: {
+                            backgroundColor: '#1a2634',
+                            titleColor: '#4fc3f7',
+                            bodyColor: '#e0e0e0',
+                            borderColor: '#2a3a4a',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: ctx => {
+                                    const val = ctx.parsed.y;
+                                    return val != null ? `${ctx.dataset.label}: $${val.toFixed(2)}` : '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'week', displayFormats: { week: 'MM/dd' } },
+                            ticks: { color: '#556677' },
+                            grid: { color: '#1a2634' },
+                        },
+                        y: {
+                            ticks: {
+                                color: '#556677',
+                                callback: v => '$' + v.toFixed(0),
+                            },
+                            grid: { color: '#1a2634' },
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initial load
+        fetchAndRender();
+    </script>
+</body>
+</html>
