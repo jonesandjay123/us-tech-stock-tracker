@@ -95,6 +95,10 @@
                 <option value="6m" selected>6 個月</option>
                 <option value="1y">1 年</option>
                 <option value="2y">2 年</option>
+                <option value="5y">5 年</option>
+                <option value="10y">10 年</option>
+                <option value="20y">20 年</option>
+                <option value="50y">50 年</option>
             </select>
         </div>
     </div>
@@ -144,7 +148,7 @@
 
         function getRangeDays() {
             const val = document.getElementById('rangePicker').value;
-            const map = { '3m': 90, '6m': 180, '1y': 365, '2y': 730 };
+            const map = { '3m': 90, '6m': 180, '1y': 365, '2y': 730, '5y': 1825, '10y': 3650, '20y': 7300, '50y': 18250 };
             return map[val] || 180;
         }
 
