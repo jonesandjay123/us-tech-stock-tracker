@@ -6,6 +6,7 @@
     <title>美股科技基金均線追蹤</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -90,6 +91,10 @@
         </div>
         <div>
             <label>期間：</label>
+            <button id="resetZoom" style="background:#f44336;color:#fff;font-weight:600;">🔄 Reset Zoom</button>
+        </div>
+        <div>
+            <label>期間：</label>
             <select id="rangePicker">
                 <option value="3m">3 個月</option>
                 <option value="6m" selected>6 個月</option>
@@ -145,6 +150,11 @@
 
         // Range picker
         document.getElementById('rangePicker').addEventListener('change', fetchAndRender);
+
+        // Reset zoom
+        document.getElementById('resetZoom').addEventListener('click', () => {
+            if (chart) chart.resetZoom();
+        });
 
         function getRangeDays() {
             const val = document.getElementById('rangePicker').value;
@@ -266,6 +276,17 @@
                         intersect: false,
                     },
                     plugins: {
+                        zoom: {
+                            zoom: {
+                                drag: {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(79,195,247,0.15)',
+                                    borderColor: '#4fc3f7',
+                                    borderWidth: 1,
+                                },
+                                mode: 'x',
+                            },
+                        },
                         legend: {
                             labels: { color: '#8899aa', usePointStyle: true },
                         },
