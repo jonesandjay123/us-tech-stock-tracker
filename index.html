@@ -74,16 +74,15 @@
                 <button data-ticker="ARKK">ARKK</button>
                 <button data-ticker="SMH">SMH</button>
                 <button data-ticker="SOXX">SOXX</button>
+                <button data-ticker="VOO">VOO</button>
             </div>
         </div>
         <div>
             <label>均線：</label>
             <div class="ma-toggles" id="maToggles">
-                <button data-ma="5" class="active">MA5</button>
-                <button data-ma="10" class="active">MA10</button>
                 <button data-ma="20" class="active">MA20</button>
-                <button data-ma="60">MA60</button>
-                <button data-ma="120">MA120</button>
+                <button data-ma="50" class="active">MA50</button>
+                <button data-ma="200">MA200</button>
                 <button data-ma="240">MA240</button>
             </div>
         </div>
@@ -104,17 +103,15 @@
 
     <script>
         const MA_COLORS = {
-            5:   '#ffeb3b',
-            10:  '#ff9800',
             20:  '#f44336',
-            60:  '#4fc3f7',
-            120: '#ab47bc',
+            50:  '#4fc3f7',
+            200: '#ab47bc',
             240: '#66bb6a',
         };
 
         let chart = null;
         let currentTicker = 'QQQ';
-        let activeMAs = new Set([5, 10, 20]);
+        let activeMAs = new Set([20, 50]);
         let rawData = [];
 
         // Ticker buttons
