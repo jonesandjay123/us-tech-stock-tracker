@@ -182,8 +182,8 @@
             const period2 = Math.floor(endDate.getTime() / 1000);
 
             try {
-                // Using Yahoo Finance via a CORS proxy or direct
-                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${currentTicker}?period1=${period1}&period2=${period2}&interval=1d`;
+                const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${currentTicker}?period1=${period1}&period2=${period2}&interval=1d`;
+                const url = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
                 const resp = await fetch(url);
                 const json = await resp.json();
                 const result = json.chart.result[0];
